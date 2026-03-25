@@ -70,7 +70,6 @@ public class RikishiDAO implements IReader<Rikishi>, IWriter<Rikishi> {
             }
             
         } catch (SQLException e) {
-            System.err.println("Error obteniendo rikishi: " + e.getMessage());
         }
         
         return null;
@@ -92,7 +91,7 @@ public class RikishiDAO implements IReader<Rikishi>, IWriter<Rikishi> {
             return stmt.executeUpdate() > 0;
             
         } catch (SQLException e) {
-            System.err.println("Error insertando rikishi: " + e.getMessage());
+            System.err.println("Error SQL insertando rikishi: " + e.getMessage());
             return false;
         }
     }

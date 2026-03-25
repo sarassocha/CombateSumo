@@ -12,7 +12,7 @@ import java.util.Properties;
  *
  * @author Sara
  */
-public class ControlProperties {
+public class ControlArchivos {
     private ControlGeneral cGeneral;
     private File origenActual;
 
@@ -21,7 +21,7 @@ public class ControlProperties {
      *
      * @param cGeneral Control General
      */
-    public ControlProperties(ControlGeneral cGeneral) {
+    public ControlArchivos(ControlGeneral cGeneral) {
         this.cGeneral = cGeneral;
     }
 

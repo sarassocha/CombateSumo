@@ -104,22 +104,20 @@ public class ControlConexion {
             int victorias = Integer.parseInt(datos[3]);
             List<String> tecnicas = Arrays.asList(tecnicasArr);
 
-            // Registrar en la base de datos
             controlGeneral.registrarRikishiEnDB(nombre, peso, altura, victorias, tecnicas);
 
-            // Crear el ControlRikishi
             ControlRikishi rikishi = controlGeneral.conectarRikishi(nombre, peso, altura, victorias, tecnicas);
             if (rikishi != null) {
                 synchronized (this) {
                     socketsPorRikishi.put(rikishi, cliente);
                 }
-                // Este hilo ahora ejecuta la lógica del rikishi
-                // No se crea un nuevo hilo - el hilo actual se convierte en el hilo del rikishi
                 rikishi.run();
             }
 
         } catch (IOException e) {
             controlGeneral.registrarLog("Error leyendo datos del cliente: " + e.getMessage());
+        } catch (Exception e) {
+            controlGeneral.registrarLog("Error en manejarCliente: " + e.getMessage());
         }
     }
 

@@ -16,6 +16,18 @@ Sistema de combate de sumo con integración a base de datos MySQL usando patrone
 
 ## Inicio Rápido
 
+### 0. Instalar Driver MySQL (REQUERIDO)
+
+**El proyecto NO funcionará sin este paso:**
+
+1. Descarga el driver: https://dev.mysql.com/downloads/connector/j/
+2. Extrae el ZIP y busca `mysql-connector-j-8.x.xx.jar`
+3. En NetBeans: Click derecho en "Libraries" → "Add JAR/Folder..."
+4. Selecciona el JAR descargado
+5. Clean and Build el proyecto
+
+**Guía detallada:** Ver archivo `INSTALAR_DRIVER_MYSQL.md`
+
 ### 1. Configurar Base de Datos
 ```bash
 # Conectar a MySQL
@@ -78,11 +90,11 @@ Docs/
 
 ## Flujo del Torneo
 
-### Modo Cliente (Con Hilos)
+### Modo Torneo de 6 Jugadores (Actual)
 ```
-1. Servidor inicia
+1. Servidor inicia y espera 6 clientes
    ↓
-2. Cliente conecta
+2. Cada cliente conecta y envía sus datos
    ↓
 3. Hilo lee datos del cliente
    ↓
@@ -90,30 +102,29 @@ Docs/
    ↓
 5. Mismo hilo ejecuta lógica del rikishi
    ↓
-6. Rikishis combaten sincronizados en Dohyo
+6. Cuando hay 6 conectados, usuario presiona "Iniciar Torneo"
    ↓
-7. Ganador incrementa victorias
+7. RONDA 1: Se escogen 2 rikishis aleatorios
    ↓
-8. Actualiza BD
+8. Combaten sincronizados en Dohyo
+   ↓
+9. Ganador incrementa victorias, perdedor es eliminado
+   ↓
+10. RONDA 2+: Ganador anterior vs nuevo rival aleatorio
+   ↓
+11. Continúa hasta que solo queda 1 rikishi (campeón)
+   ↓
+12. Cada victoria se actualiza en BD
 ```
 
-### Modo Base de Datos (Sin Hilos Adicionales)
-```
-1. Servidor inicia
-   ↓
-2. Carga rikishis desde BD (RikishiDAO.obtenerTodos())
-   ↓
-3. Usuario presiona "Iniciar Torneo"
-   ↓
-4. Para cada combate (3 total):
-   a. Selecciona 2 rikishis aleatorios
-   b. Combate secuencial (sin hilos)
-   c. Turnos alternados
-   d. Ganador incrementa victorias
-   e. Actualiza BD (RikishiDAO.actualizar())
-   ↓
-5. Torneo finalizado
-```
+### Características del Torneo
+- **6 jugadores** conectados simultáneamente
+- **Torneo acumulativo**: El ganador sigue combatiendo
+- **Selección aleatoria**: Primer combate y rivales subsecuentes
+- **Eliminación directa**: El perdedor sale del torneo
+- **Contador de victorias**: Cada rikishi acumula victorias en el torneo
+- **Mensajes por ronda**: "Ronda X - ¡Ganaste! Victorias totales: Y"
+- **Registro en BD**: Cada rikishi se registra automáticamente al conectar
 
 ## Patrones Implementados
 
@@ -207,24 +218,46 @@ private static final int MAX_COMBATES = 3; // Modificar aquí
 ### Driver MySQL no encontrado
 ```bash
 # Descargar mysql-connector-java.jar
-# Agregar a librerías del proyecto
+# Agregar a librerías del proyecto en NetBeans
 ```
 
-### Error de conexión
+### Error de conexión a BD
 ```bash
 # Verificar MySQL esté corriendo
 mysql -u root -p
 
-# Verificar credenciales en servidor.properties
+# Verificar credenciales en Data/servidor.properties
+# Verificar que la base de datos 'sumo_db' exista
 ```
 
-### No se cargan rikishis
+### No se registran rikishis en BD
+1. Verifica los logs del servidor en la consola
+2. Busca mensajes como:
+   - `Configuración BD cargada`
+   - `Intentando conectar a BD`
+   - `Conexión a BD establecida exitosamente`
+   - `Intentando registrar rikishi en BD: [nombre]`
+   - `✓ Rikishi registrado exitosamente en BD: [nombre]`
+
+3. Si ves errores:
+   - `Driver MySQL no encontrado` → Agrega el JAR del driver
+   - `Access denied` → Verifica usuario/contraseña
+   - `Unknown database` → Ejecuta el script SQL
+   - `Communications link failure` → Verifica que MySQL esté corriendo
+
+### Verificar datos en BD
 ```sql
--- Verificar datos en BD
+-- Conectar a MySQL
+mysql -u root -p
+
+-- Usar la base de datos
+USE sumo_db;
+
+-- Ver todos los rikishis
 SELECT * FROM rikishi;
 
--- Insertar datos si es necesario
-INSERT INTO rikishi VALUES ('Nombre', 150, 180, 0, 'Oshidashi,Yorikiri');
+-- Ver rikishis registrados por clientes (victorias = 0 inicialmente)
+SELECT nombre, peso, altura, victorias FROM rikishi WHERE victorias = 0;
 ```
 
 ## Documentación Adicional

@@ -50,42 +50,33 @@ public class ConexionDB {
             this.usuario = props.getProperty("db.usuario");
             this.contrasena = props.getProperty("db.contrasena");
         } catch (IOException e) {
-            System.err.println("Error cargando configuración de BD: " + e.getMessage());
-            // Valores por defecto
             this.url = "jdbc:mysql://localhost:3306/sumo_db";
             this.usuario = "root";
             this.contrasena = "";
         }
     }
     
-    /**
-     * Obtiene una conexión activa a la base de datos.
-     * Si la conexión está cerrada, crea una nueva.
-     * 
-     * @return Conexión a la base de datos
-     * @throws SQLException Si hay error al conectar
-     */
     public Connection getConexion() throws SQLException {
         if (conexion == null || conexion.isClosed()) {
             try {
-                Class.forName("com.mysql.cj.jdbc.Driver");
+                Class.forName("com.mysql.jdbc.Driver");
                 conexion = DriverManager.getConnection(url, usuario, contrasena);
             } catch (ClassNotFoundException e) {
+                System.err.println("Driver MySQL no encontrado: " + e.getMessage());
                 throw new SQLException("Driver MySQL no encontrado: " + e.getMessage());
+            } catch (SQLException e) {
+                System.err.println("Error conectando a BD: " + e.getMessage());
+                throw e;
             }
         }
         return conexion;
     }
     
-    /**
-     * Cierra la conexión a la base de datos.
-     */
     public void cerrarConexion() {
         if (conexion != null) {
             try {
                 conexion.close();
             } catch (SQLException e) {
-                System.err.println("Error cerrando conexión: " + e.getMessage());
             }
         }
     }

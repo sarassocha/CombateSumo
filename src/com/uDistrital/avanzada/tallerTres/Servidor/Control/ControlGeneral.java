@@ -16,7 +16,7 @@ public class ControlGeneral {
     private ControlConexion controlConexion;
     private final ControlVista cVista;
     private List<String[]> listaGifDatos;
-    private final ControlProperties cProps;
+    private final ControlArchivos cProps;
     private final Dohyo dohyo;
     private final List<ControlRikishi> rikishisConectados;
     private final List<ControlRikishi> rikishisActivos;
@@ -28,7 +28,7 @@ public class ControlGeneral {
 
     public ControlGeneral() {
         this.cVista = new ControlVista(this);
-        this.cProps = new ControlProperties(this);
+        this.cProps = new ControlArchivos(this);
         this.listaGifDatos = new ArrayList<>();
         this.dohyo = new Dohyo(this);
         this.rikishisConectados = new ArrayList<>();
@@ -72,9 +72,6 @@ public class ControlGeneral {
         }
     }
 
-    /**
-     * Registra un rikishi en la BD cuando un cliente se conecta.
-     */
     public void registrarRikishiEnDB(String nombre, int peso, int altura, int victorias, List<String> tecnicas) {
         try {
             com.uDistrital.avanzada.tallerTres.Servidor.Modelo.Rikishi existente = rikishiDAO.obtenerPorId(nombre);
@@ -83,12 +80,14 @@ public class ControlGeneral {
                     new com.uDistrital.avanzada.tallerTres.Servidor.Modelo.Rikishi(nombre, peso, altura, victorias, tecnicas);
                 if (rikishiDAO.insertar(nuevoRikishi)) {
                     cVista.registrarLog("Rikishi registrado en BD: " + nombre);
+                } else {
+                    cVista.registrarLog("Error: No se pudo insertar rikishi en BD: " + nombre);
                 }
             } else {
                 cVista.registrarLog("Rikishi ya existe en BD: " + nombre);
             }
         } catch (Exception e) {
-            cVista.mostrarError("Error al registrar rikishi en BD: " + e.getMessage());
+            cVista.registrarLog("Error al registrar rikishi en BD: " + e.getMessage());
         }
     }
 
