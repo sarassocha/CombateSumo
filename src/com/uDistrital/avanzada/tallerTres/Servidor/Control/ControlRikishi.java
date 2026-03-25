@@ -5,11 +5,11 @@ import java.util.List;
 import java.util.Random;
 
 /**
- * Controlador del luchador de sumo. Extiende {@link Thread} para ejecutarse concurrentemente.
+ * Controlador del luchador de sumo. Implementa {@link Runnable} para ejecutarse concurrentemente.
  * Crea y gestiona su propio modelo {@link Rikishi} internamente.
  * Se comunica con {@link ControlGeneral} para solicitar turnos y consultar el estado del combate.
  */
-public class ControlRikishi extends Thread {
+public class ControlRikishi implements Runnable {
 
     /** Modelo del luchador asociado a este controlador. */
     private final Rikishi rikishi;
@@ -19,6 +19,15 @@ public class ControlRikishi extends Thread {
 
     /** Generador de números aleatorios para los tiempos de espera entre turnos. */
     private final Random random;
+
+    /** Indica si el luchador está activo en un combate. */
+    private volatile boolean enCombate;
+
+    /** Indica si el hilo debe detenerse. */
+    private volatile boolean detenido;
+
+    /** Contador de victorias en el torneo actual. */
+    private int victoriasEnTorneo;
 
     /**
      * Constructor que inicializa el controlador con los datos del luchador.
@@ -34,6 +43,9 @@ public class ControlRikishi extends Thread {
         this.rikishi = new Rikishi(nombre, peso, altura, victorias, tecnicas);
         this.controlGeneral = controlGeneral;
         this.random = new Random();
+        this.enCombate = false;
+        this.detenido = false;
+        this.victoriasEnTorneo = 0;
     }
 
     /**
@@ -83,13 +95,61 @@ public class ControlRikishi extends Thread {
     }
 
     /**
+     * Activa al luchador para participar en un combate.
+     */
+    public void activarParaCombate() {
+        this.enCombate = true;
+        rikishi.setEliminado(false);
+    }
+
+    /**
+     * Detiene el hilo del luchador (cuando es eliminado del torneo).
+     */
+    public void detener() {
+        this.detenido = true;
+        this.enCombate = false;
+    }
+
+    /**
+     * Incrementa el contador de victorias en el torneo.
+     */
+    public void incrementarVictorias() {
+        this.victoriasEnTorneo++;
+    }
+
+    /**
+     * Retorna el número de victorias en el torneo actual.
+     *
+     * @return Número de victorias
+     */
+    public int getVictoriasEnTorneo() {
+        return victoriasEnTorneo;
+    }
+
+    /**
      * Lógica de ejecución del hilo del luchador.
-     * Solicita turnos al {@link ControlGeneral} mientras el combate no haya terminado.
+     * Espera a ser activado para un combate, luego solicita turnos mientras el combate no termine.
      * Si fue golpeado, espera un tiempo aleatorio antes de continuar.
      */
     @Override
     public void run() {
-        while (!controlGeneral.isCombateTerminado()) {
+        while (!detenido) {
+            if (!enCombate) {
+                // Esperar a ser activado para un combate
+                try {
+                    Thread.sleep(100);
+                } catch (InterruptedException ie) {
+                    Thread.currentThread().interrupt();
+                    break;
+                }
+                continue;
+            }
+
+            if (controlGeneral.isCombateTerminado()) {
+                enCombate = false;
+                continue;
+            }
+
             if (rikishi.isEliminado()) {
                 try {
                     Thread.sleep(random.nextInt(250));

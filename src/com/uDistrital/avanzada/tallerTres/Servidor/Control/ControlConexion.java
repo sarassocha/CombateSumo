@@ -5,7 +5,9 @@ import java.io.IOException;
 import java.net.Socket;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Controlador de conexiones del servidor.
@@ -21,13 +23,16 @@ public class ControlConexion {
     private ControlGeneral controlGeneral;
 
     /** Número máximo de clientes permitidos simultáneamente. */
-    private int MAX_CLIENTES = 2;
+    private int MAX_CLIENTES = 6;
 
     /** Contador de clientes conectados hasta el momento. */
     private int contadorClientes = 0;
 
     /** Lista de sockets de clientes conectados. */
     private List<Socket> clientes = new ArrayList<>();
+
+    /** Mapa de sockets por rikishi para envío individual. */
+    private Map<ControlRikishi, Socket> socketsPorRikishi = new HashMap<>();
 
     /**
      * Constructor que inicializa el servidor de conexiones y comienza a esperar clientes.
@@ -47,8 +52,11 @@ public class ControlConexion {
     }
 
     /**
-     * Lanza un hilo que espera conexiones entrantes hasta alcanzar el máximo de clientes.
-     * Por cada cliente aceptado, lanza un hilo para manejar su comunicación.
+     * Lanza un hilo que espera conexiones. Por cada cliente aceptado crea un hilo
+     * para manejarlo, liberando el loop para aceptar el siguiente.
+     * Dos puntos de creación de hilos:
+     * 1. El loop de aceptación
+     * 2. El hilo de manejo por cliente (que ejecuta toda la lógica del rikishi)
      */
     public void esperarClientes() {
         new Thread(() -> {
@@ -60,6 +68,7 @@ public class ControlConexion {
                     synchronized (this) {
                         clientes.add(cliente);
                     }
+                    // Crear hilo por cliente que ejecutará toda la lógica del rikishi
                     new Thread(() -> manejarCliente(cliente)).start();
                 } catch (IOException e) {
                     controlGeneral.registrarLog("Error aceptando cliente: " + e.getMessage());
@@ -69,7 +78,9 @@ public class ControlConexion {
     }
 
     /**
-     * Lee los datos del luchador enviados por el cliente y los delega al {@link ControlGeneral}.
+     * Lee los datos del luchador enviados por el cliente, los registra en la BD,
+     * y ejecuta la lógica del rikishi en este mismo hilo.
+     * Este hilo se convierte en el hilo del rikishi después de leer los datos.
      *
      * @param cliente Socket del cliente conectado
      */
@@ -93,7 +104,19 @@ public class ControlConexion {
             int victorias = Integer.parseInt(datos[3]);
             List<String> tecnicas = Arrays.asList(tecnicasArr);
 
-            controlGeneral.conectarRikishi(nombre, peso, altura, victorias, tecnicas);
+            // Registrar en la base de datos
+            controlGeneral.registrarRikishiEnDB(nombre, peso, altura, victorias, tecnicas);
+
+            // Crear el ControlRikishi
+            ControlRikishi rikishi = controlGeneral.conectarRikishi(nombre, peso, altura, victorias, tecnicas);
+            if (rikishi != null) {
+                synchronized (this) {
+                    socketsPorRikishi.put(rikishi, cliente);
+                }
+                // Este hilo ahora ejecuta la lógica del rikishi
+                // No se crea un nuevo hilo - el hilo actual se convierte en el hilo del rikishi
+                rikishi.run();
+            }
 
         } catch (IOException e) {
             controlGeneral.registrarLog("Error leyendo datos del cliente: " + e.getMessage());
@@ -111,6 +134,54 @@ public class ControlConexion {
                 conexion.enviarTexto(cliente, mensaje);
             } catch (IOException e) {
                 controlGeneral.registrarLog("Error enviando resultado: " + e.getMessage());
+            }
+        }
+    }
+
+    /**
+     * Envía un mensaje a un rikishi específico.
+     * Maneja silenciosamente errores de conexión cerrada.
+     *
+     * @param rikishi Rikishi destinatario
+     * @param mensaje Mensaje a enviar
+     */
+    public void enviarMensajeA(ControlRikishi rikishi, String mensaje) {
+        Socket cliente = socketsPorRikishi.get(rikishi);
+        if (cliente != null && !cliente.isClosed()) {
+            try {
+                conexion.enviarTexto(cliente, mensaje);
+            } catch (IOException e) {
+                // Ignorar errores de conexión cerrada (es esperado cuando se elimina un jugador)
+                String errorMsg = e.getMessage();
+                if (errorMsg != null && 
+                    !errorMsg.contains("conexión establecida") && 
+                    !errorMsg.contains("Connection reset") &&
+                    !errorMsg.contains("Broken pipe") &&
+                    !errorMsg.contains("Software caused connection abort")) {
+                    controlGeneral.registrarLog("Error enviando mensaje a " + rikishi.ObtenerNombre() + ": " + errorMsg);
+                }
+            }
+        }
+    }
+
+    /**
+     * Cierra la conexión de un rikishi eliminado.
+     *
+     * @param rikishi Rikishi cuya conexión se cerrará
+     */
+    public void cerrarConexion(ControlRikishi rikishi) {
+        Socket cliente = socketsPorRikishi.get(rikishi);
+        if (cliente != null) {
+            try {
+                if (!cliente.isClosed()) {
+                    cliente.close();
+                }
+                synchronized (this) {
+                    clientes.remove(cliente);
+                    socketsPorRikishi.remove(rikishi);
+                }
+            } catch (IOException e) {
+                // Ignorar errores al cerrar
             }
         }
     }

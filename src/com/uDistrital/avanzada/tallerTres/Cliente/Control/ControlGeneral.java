@@ -5,6 +5,8 @@ import java.io.IOException;
 import java.util.List;
 import java.util.ArrayList;
 
+import javax.swing.SwingWorker;
+
 import com.uDistrital.avanzada.tallerTres.Cliente.Modelo.ConexionCliente;
 
 /**
@@ -12,17 +14,17 @@ import com.uDistrital.avanzada.tallerTres.Cliente.Modelo.ConexionCliente;
  */
 public class ControlGeneral {
 
-    private ControlVista cVista;
     private List<String> listaKimarites;
     private ControlProperties cProps;
     private ConexionCliente conexion;
     private int puerto;
     private String hostname;
+    private ControlVista cVista;
 
     public ControlGeneral() {
         this.cProps = new ControlProperties(this);
-        this.cVista = new ControlVista(this);
         this.listaKimarites = new ArrayList<>();
+        this.cVista = new ControlVista(this);
     }
 
     public void cargarProperties(File archivo) {
@@ -47,51 +49,77 @@ public class ControlGeneral {
     }
 
     /**
-     * Envía los datos del luchador al servidor.
+     * Envía los datos del luchador al servidor y escucha resultados.
+     * Usa SwingWorker para no bloquear el EDT y recibir múltiples mensajes.
+     * Toda la comunicación se hace a través de ConexionCliente.
      */
     public void enviarAlServidor(String nombre, int peso, int altura, int victorias) {
-        try {
-            conexion = new ConexionCliente(hostname, puerto);
-
-            String[] datos = {
-                nombre,
-                String.valueOf(peso),
-                String.valueOf(altura),
-                String.valueOf(victorias)
-            };
-
-            List<String> tecnicasSeleccionadas = cVista.ObtenerTecnicasSeleccionadas();
-            String[] tecnicas = tecnicasSeleccionadas.toArray(new String[0]);
-
-            conexion.enviarDatos(datos, tecnicas);
-
-            new Thread(() -> {
+        List<String> tecnicasSeleccionadas = cVista.ObtenerTecnicasSeleccionadas();
+        
+        SwingWorker<Void, String> worker = new SwingWorker<Void, String>() {
+            @Override
+            protected Void doInBackground() throws Exception {
                 try {
+                    conexion = new ConexionCliente(hostname, puerto);
+
+                    String[] datos = {
+                        nombre,
+                        String.valueOf(peso),
+                        String.valueOf(altura),
+                        String.valueOf(victorias)
+                    };
+                    String[] tecnicas = tecnicasSeleccionadas.toArray(new String[0]);
+
+                    // Enviar datos a través de ConexionCliente
+                    conexion.enviarDatos(datos, tecnicas);
+
+                    // Escuchar mensajes hasta que la conexión se cierre o recibamos mensaje final
                     while (true) {
-                        String mensaje = conexion.recibirResultado();
+                        try {
+                            // Recibir mensaje a través de ConexionCliente
+                            String mensaje = conexion.recibirResultado();
+                            publish(mensaje);
 
-                        if (mensaje.equals("Combate en desarrollo")) {
-                            cVista.notificarCombateEnDesarrollo();
-
-                        } else if (mensaje.contains("gana con")) {
-                            String miNombre = cVista.ObtenerNombre();
-                            String nombreGanador = mensaje.split(" ")[0].replace("¡", "");
-                            boolean gane = miNombre.equals(nombreGanador);
-                            cVista.notificarResultadoFinal(mensaje, gane);
-                            conexion.cerrar();
+                            // Si recibimos mensaje de eliminación o victoria del torneo, terminar
+                            if (mensaje.contains("eliminado del torneo") || 
+                                mensaje.contains("Ganaste el torneo")) {
+                                break;
+                            }
+                        } catch (IOException e) {
+                            // Conexión cerrada por el servidor
                             break;
-
-                        } else {
-                            cVista.notificarResultado(mensaje);
                         }
                     }
+                    
+                    conexion.cerrar();
                 } catch (Exception e) {
-                    cVista.notificarError("Error recibiendo datos: " + e.getMessage());
+                    publish("ERROR:" + e.getMessage());
                 }
-            }).start();
+                return null;
+            }
 
-        } catch (Exception e) {
-            cVista.notificarError("Error de conexión: " + e.getMessage());
-        }
+            @Override
+            protected void process(List<String> mensajes) {
+                for (String mensaje : mensajes) {
+                    if (mensaje.startsWith("ERROR:")) {
+                        cVista.notificarError("Error de conexión: " + mensaje.substring(6));
+                    } else if (mensaje.contains("Ganaste") && mensaje.contains("Victorias totales")) {
+                        // Mensaje de victoria en ronda
+                        cVista.notificarResultado("✓ " + mensaje);
+                    } else if (mensaje.contains("eliminado del torneo")) {
+                        // Mensaje de derrota final
+                        cVista.notificarResultadoFinal(mensaje, false);
+                    } else if (mensaje.contains("Ganaste el torneo")) {
+                        // Mensaje de victoria del torneo completo
+                        cVista.notificarResultadoFinal(mensaje, true);
+                    } else {
+                        // Otros mensajes (combate en desarrollo, etc.)
+                        cVista.notificarResultado(mensaje);
+                    }
+                }
+            }
+        };
+        
+        worker.execute();
     }
 }

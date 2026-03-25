@@ -58,9 +58,20 @@ public class VentanaPrincipal extends JFrame {
         configurarVentana();
         configurarFileChooser();
         inicializarComponentes();
-        setVisible(true);
+        setVisible(false);
     }
+    public File iniciarConArchivo() {
+        int resultado = fileChooser.showOpenDialog(null);
 
+        if (resultado == JFileChooser.APPROVE_OPTION) {
+            File archivo = fileChooser.getSelectedFile();
+
+            setVisible(true);
+            return archivo;
+        }
+
+        return null;
+    }
     public void configurarVentana() {
         setTitle("Dohyo - Combate de Sumo");
         setSize(1100, 750);
@@ -167,7 +178,7 @@ public class VentanaPrincipal extends JFrame {
         panelMensajes.setBorder(BorderFactory.createEtchedBorder());
         panelMensajes.setPreferredSize(new Dimension(1100, 30));
 
-        lblMensajeEstado = new JLabel("Listo para cargar archivo properties");
+        lblMensajeEstado = new JLabel();
         lblMensajeEstado.setFont(new Font("Arial", Font.ITALIC, 12));
         lblMensajeEstado.setForeground(new Color(70, 70, 70));
         panelMensajes.add(lblMensajeEstado, BorderLayout.WEST);

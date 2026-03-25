@@ -18,7 +18,7 @@ public class Rikishi {
     private final int altura;
 
     /** Número de victorias previas del luchador. */
-    private final int victorias;
+    private int victorias;
 
     /** Lista de técnicas (kimarites) que domina el luchador. */
     private final List<String> tecnicas;
@@ -105,5 +105,14 @@ public class Rikishi {
      */
     public synchronized boolean isEliminado() {
         return eliminado;
+    }
+
+    /**
+     * Establece el número de victorias del luchador.
+     *
+     * @param victorias Número de victorias
+     */
+    public void setVictorias(int victorias) {
+        this.victorias = victorias;
     }
 }

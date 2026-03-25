@@ -22,45 +22,50 @@ public class ControlVista implements ActionListener {
      * @param general Control General
      */
     public ControlVista(ControlGeneral general) {
-        this.controlGeneral = general;
-        this.vista = new VentanaPrincipal();
-        this.vista.getBtnIniciar().addActionListener(this);
-        this.vista.getBtnSalir().addActionListener(this);
-    }
+    this.controlGeneral = general;
+    this.vista = new VentanaPrincipal();
 
-    /**
- * Solicita a la vista seleccionar un archivo
- */
-public void solicitarCargarArchivo() {
-    File archivo = vista.solicitarArchivoPropiedades();
-
-    // Usuario canceló el diálogo
-    if (archivo == null) {
-        vista.mostrarMensaje("Selección cancelada");
-        return;
-    }
-
-    // Validar existencia real del archivo
-    if (!archivo.exists()) {
-        vista.mostrarError("El archivo seleccionado no existe.");
-        return;
-    }
-
-    // Validar que sea archivo (no carpeta)
-    if (!archivo.isFile()) {
-        vista.mostrarError("El archivo seleccionado no es válido.");
-        return;
-    }
-
-    // Validar extensión .properties
-    if (!archivo.getName().toLowerCase().endsWith(".properties")) {
-        vista.mostrarError("El archivo seleccionado no es un archivo .properties válido.");
-        return;
-    }
-
-    // TODO correcto → enviar al control general
-    controlGeneral.cargarProperties(archivo);
+    this.vista.getBtnIniciar().addActionListener(this);
+    this.vista.getBtnSalir().addActionListener(this);
 }
+    /**
+     * Inicia el flujo inicial de la vista, despues de haber cargado el archivo
+     *
+     * 
+     */
+    public void iniciarFlujoInicial() {
+        File archivo = vista.iniciarConArchivo();
+
+        if (archivo == null) {
+            System.exit(0);
+        }
+
+        procesarArchivoInicial(archivo);
+    }
+    /**
+     * Procesa el archivo enviado por el JfileChooser
+     *
+     * 
+     */
+    private void procesarArchivoInicial(File archivo) {
+
+        if (!archivo.exists()) {
+            vista.mostrarError("El archivo seleccionado no existe.");
+            System.exit(0);
+        }
+
+        if (!archivo.isFile()) {
+            vista.mostrarError("El archivo seleccionado no es válido.");
+            System.exit(0);
+        }
+
+        if (!archivo.getName().toLowerCase().endsWith(".properties")) {
+            vista.mostrarError("El archivo seleccionado no es un archivo .properties válido.");
+            System.exit(0);
+        }
+
+        controlGeneral.cargarProperties(archivo);
+    }
 
 
     /**

@@ -3,60 +3,47 @@ package com.uDistrital.avanzada.tallerTres.Servidor.Control;
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
+
+import com.uDistrital.avanzada.tallerTres.Servidor.DAO.RikishiDAO;
 
 /**
  * Coordinador principal del servidor.
- * Orquesta los demás controladores sin acceder directamente a ningún modelo.
- * Es el punto de entrada de todos los eventos del sistema: conexiones, combate y vista.
+ * Los clientes se conectan, se registran en BD automáticamente, y luego combaten.
  */
 public class ControlGeneral {
 
-    /** Controlador de conexiones de red. */
     private ControlConexion controlConexion;
-
-    /** Controlador de la vista principal del servidor. */
     private final ControlVista cVista;
-
-    /** Lista de datos de gifs cargados desde el archivo properties. Cada entrada es [nombre, ruta]. */
     private List<String[]> listaGifDatos;
-
-    /** Controlador del archivo de propiedades. */
     private final ControlProperties cProps;
-
-    /** Controlador del dohyo (lógica del combate). */
-    private final ControlDohyo controlDohyo;
-
-    /** Lista de controladores de luchadores conectados. Máximo 2. */
+    private final Dohyo dohyo;
     private final List<ControlRikishi> rikishisConectados;
+    private final List<ControlRikishi> rikishisActivos;
+    private ControlRikishi ganadorActual;
+    private ControlRikishi combatiente1;
+    private ControlRikishi combatiente2;
+    private int rondaActual;
+    private RikishiDAO rikishiDAO;
 
-    /** Mapa de rivalidades entre luchadores. Gestionado aquí para que ControlDohyo no conozca a ControlRikishi directamente. */
-    private final Map<ControlRikishi, ControlRikishi> rivales = new HashMap<>();
-
-    /**
-     * Constructor que inicializa todos los controladores y arranca el servidor de conexiones.
-     */
     public ControlGeneral() {
         this.cVista = new ControlVista(this);
         this.cProps = new ControlProperties(this);
         this.listaGifDatos = new ArrayList<>();
-        this.controlDohyo = new ControlDohyo(this);
+        this.dohyo = new Dohyo(this);
         this.rikishisConectados = new ArrayList<>();
+        this.rikishisActivos = new ArrayList<>();
+        this.rondaActual = 0;
+        this.rikishiDAO = new RikishiDAO();
 
         try {
             controlConexion = new ControlConexion(this);
         } catch (Exception e) {
             cVista.mostrarError("Error iniciando servidor: " + e.getMessage());
         }
+        cVista.iniciarFlujoInicial();
     }
 
-    /**
-     * Carga el archivo de propiedades de animaciones y actualiza la vista con el fondo y gif de espera.
-     *
-     * @param archivo Archivo .properties de animaciones seleccionado por el usuario
-     */
     public void cargarProperties(File archivo) {
         try {
             cProps.cargarDesde(archivo);
@@ -86,150 +73,161 @@ public class ControlGeneral {
     }
 
     /**
-     * Llamado por {@link ControlConexion} cuando llegan los datos de un cliente.
-     * Crea el {@link ControlRikishi} correspondiente y actualiza la vista.
-     *
-     * @param nombre    Nombre del luchador
-     * @param peso      Peso en kg
-     * @param altura    Altura en cm
-     * @param victorias Número de victorias previas
-     * @param tecnicas  Lista de técnicas seleccionadas
+     * Registra un rikishi en la BD cuando un cliente se conecta.
      */
-    public synchronized void conectarRikishi(String nombre, int peso, int altura, int victorias, List<String> tecnicas) {
-        if (rikishisConectados.size() >= 2) {
-            cVista.mostrarMensaje("Ya hay 2 luchadores conectados.");
-            return;
+    public void registrarRikishiEnDB(String nombre, int peso, int altura, int victorias, List<String> tecnicas) {
+        try {
+            com.uDistrital.avanzada.tallerTres.Servidor.Modelo.Rikishi existente = rikishiDAO.obtenerPorId(nombre);
+            if (existente == null) {
+                com.uDistrital.avanzada.tallerTres.Servidor.Modelo.Rikishi nuevoRikishi = 
+                    new com.uDistrital.avanzada.tallerTres.Servidor.Modelo.Rikishi(nombre, peso, altura, victorias, tecnicas);
+                if (rikishiDAO.insertar(nuevoRikishi)) {
+                    cVista.registrarLog("Rikishi registrado en BD: " + nombre);
+                }
+            } else {
+                cVista.registrarLog("Rikishi ya existe en BD: " + nombre);
+            }
+        } catch (Exception e) {
+            cVista.mostrarError("Error al registrar rikishi en BD: " + e.getMessage());
+        }
+    }
+
+    public synchronized ControlRikishi conectarRikishi(String nombre, int peso, int altura, int victorias, List<String> tecnicas) {
+        if (rikishisConectados.size() >= 6) {
+            cVista.mostrarMensaje("Ya hay 6 luchadores conectados.");
+            return null;
         }
 
         ControlRikishi nuevoControl = new ControlRikishi(nombre, peso, altura, victorias, tecnicas, this);
         rikishisConectados.add(nuevoControl);
+        rikishisActivos.add(nuevoControl);
 
         cVista.mostrarMensaje(String.format("Rikishi conectado: %s (Peso: %dkg, Altura: %dcm, Victorias: %d)",
                 nombre, peso, altura, victorias));
 
         int conectados = rikishisConectados.size();
-        String rutaEntrada = getGifRuta("entrada");
-
-        if (conectados == 1) {
-            cVista.mostrarNombreJugador1(nombre);
-            if (rutaEntrada != null) cVista.mostrarGifJugador1(rutaEntrada);
-            cVista.registrarLog("Esperando " + (2 - conectados) + " rikishi(s) más...");
-        } else {
-            cVista.mostrarNombreJugador2(nombre);
-            if (rutaEntrada != null) cVista.mostrarGifJugador2(rutaEntrada);
-            cVista.registrarLog("Ambos rikishis conectados. Presiona 'Iniciar Combate' para comenzar.");
+        cVista.registrarLog("Esperando " + (6 - conectados) + " rikishi(s) más...");
+        
+        if (conectados == 6) {
+            cVista.registrarLog("Todos los rikishis conectados. Presiona 'Iniciar Torneo' para comenzar.");
         }
+
+        return nuevoControl;
     }
 
-    /**
-     * Verifica si hay 2 luchadores conectados e inicia el combate.
-     * Llamado desde el botón "Iniciar" de la vista.
-     */
     public void verificarIniciarCombate() {
-        if (rikishisConectados.size() < 2) {
-            cVista.mostrarMensaje("Faltan " + (2 - rikishisConectados.size()) + " rikishi(s) por conectarse.");
+        if (rikishisConectados.size() < 6) {
+            cVista.mostrarMensaje("Faltan " + (6 - rikishisConectados.size()) + " rikishi(s) por conectarse.");
             return;
         }
         iniciarCombate();
     }
 
-    /**
-     * Inicia el combate entre los dos luchadores conectados.
-     * Arranca los hilos de cada {@link ControlRikishi} y espera su finalización.
-     */
-    public void iniciarCombate() {
-        ControlRikishi cr1 = rikishisConectados.get(0);
-        ControlRikishi cr2 = rikishisConectados.get(1);
+    private void iniciarCombate() {
+        if (rikishisActivos.size() < 2) {
+            if (rikishisActivos.size() == 1) {
+                ControlRikishi campeon = rikishisActivos.get(0);
+                cVista.registrarLog("\n========================================");
+                cVista.registrarLog("¡¡¡ CAMPEÓN DEL TORNEO: " + campeon.ObtenerNombre() + " !!!");
+                cVista.registrarLog("Rondas ganadas: " + rondaActual);
+                cVista.registrarLog("========================================");
+                controlConexion.enviarMensajeA(campeon, "¡Ganaste el torneo completo!");
+            }
+            return;
+        }
 
-        rivales.put(cr1, cr2);
-        rivales.put(cr2, cr1);
+        rondaActual++;
+        java.util.Random random = new java.util.Random();
 
+        if (ganadorActual == null) {
+            int idx1 = random.nextInt(rikishisActivos.size());
+            combatiente1 = rikishisActivos.get(idx1);
+            
+            int idx2;
+            do {
+                idx2 = random.nextInt(rikishisActivos.size());
+            } while (idx2 == idx1);
+            combatiente2 = rikishisActivos.get(idx2);
+        } else {
+            combatiente1 = ganadorActual;
+            
+            List<ControlRikishi> rivalesPosibles = new ArrayList<>(rikishisActivos);
+            rivalesPosibles.remove(ganadorActual);
+            
+            if (rivalesPosibles.isEmpty()) {
+                iniciarCombate();
+                return;
+            }
+            
+            int idx = random.nextInt(rivalesPosibles.size());
+            combatiente2 = rivalesPosibles.get(idx);
+        }
+
+        mostrarCombatientes();
+        cVista.registrarLog(String.format("\n========== RONDA %d ==========", rondaActual));
+        cVista.registrarLog(String.format("Combate: %s vs %s", 
+                combatiente1.ObtenerNombre(), combatiente2.ObtenerNombre()));
+        
+        dohyo.iniciarCombate(combatiente1, combatiente2);
+        controlConexion.enviarMensajeA(combatiente1, "Ronda " + rondaActual + " - Combate en desarrollo");
+        controlConexion.enviarMensajeA(combatiente2, "Ronda " + rondaActual + " - Combate en desarrollo");
+    }
+
+    public void notificarFinCombate(String mensaje, ControlRikishi ganador) {
+        cVista.registrarLog(mensaje);
+        
+        ControlRikishi perdedor = (ganador == combatiente1) ? combatiente2 : combatiente1;
+        
+        ganador.incrementarVictorias();
+        
+        cVista.registrarLog(">>> GANADOR RONDA " + rondaActual + ": " + ganador.ObtenerNombre() + 
+                " (Victorias: " + ganador.getVictoriasEnTorneo() + ")");
+        
+        ganadorActual = ganador;
+        rikishisActivos.remove(perdedor);
+        perdedor.detener();
+        
+        cVista.registrarLog("Luchadores restantes: " + rikishisActivos.size());
+        
+        controlConexion.enviarMensajeA(ganador, String.format("Ronda %d - ¡Ganaste! Victorias totales: %d", 
+                rondaActual, ganador.getVictoriasEnTorneo()));
+        controlConexion.enviarMensajeA(perdedor, String.format("Ronda %d - Perdiste. Fuiste eliminado del torneo. Victorias totales: %d", 
+                rondaActual, perdedor.getVictoriasEnTorneo()));
+        
+        try {
+            Thread.sleep(500);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+        
+        controlConexion.cerrarConexion(perdedor);
+        mostrarResultados(ganador);
+
+        try {
+            Thread.sleep(2500);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+        iniciarCombate();
+    }
+
+    private void mostrarCombatientes() {
         String rutaCombate = getGifRuta("combate");
         if (rutaCombate != null) {
             cVista.mostrarGifJugador1(rutaCombate);
             cVista.mostrarGifJugador2(rutaCombate);
         }
 
-        cVista.registrarLog(String.format("¡Combate iniciado! %s vs %s", cr1.ObtenerNombre(), cr2.ObtenerNombre()));
-        controlConexion.enviarResultadoATodos("Combate en desarrollo");
-
-        cr1.start();
-        cr2.start();
-
-        new Thread(() -> {
-            try {
-                cr1.join();
-                cr2.join();
-                if (!controlDohyo.isCombateTerminado()) {
-                    cVista.registrarLog("Combate terminado sin ganador claro.");
-                }
-                rikishisConectados.clear();
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                cVista.mostrarError("Error esperando fin del combate: " + e.getMessage());
-            }
-        }).start();
+        cVista.mostrarNombreJugador1(combatiente1.ObtenerNombre());
+        cVista.mostrarNombreJugador2(combatiente2.ObtenerNombre());
     }
 
-    /**
-     * Llamado por {@link ControlRikishi} para solicitar su turno de ataque.
-     *
-     * @param atacante Controlador del luchador que solicita el turno
-     */
-    public void solicitarTurno(ControlRikishi atacante) {
-        controlDohyo.aplicarTecnica(atacante);
-    }
-
-    /**
-     * Retorna el rival de un luchador. Llamado por {@link ControlDohyo} para
-     * evitar que conozca directamente a {@link ControlRikishi}.
-     *
-     * @param atacante Controlador del luchador atacante
-     * @return Controlador del rival, o null si no existe
-     */
-    public ControlRikishi obtenerRival(ControlRikishi atacante) {
-        return rivales.get(atacante);
-    }
-
-    /**
-     * Consultado por {@link ControlRikishi} para saber si el combate ya terminó.
-     *
-     * @return true si el combate finalizó
-     */
-    public boolean isCombateTerminado() {
-        return controlDohyo.isCombateTerminado();
-    }
-
-    /**
-     * Llamado por {@link ControlDohyo} para notificar un movimiento del combate.
-     *
-     * @param mensaje Descripción del movimiento
-     */
-    public void notificarMovimiento(String mensaje) {
-        cVista.registrarLog(mensaje);
-    }
-
-    /**
-     * Llamado por {@link ControlDohyo} al terminar el combate.
-     * Notifica el resultado a la vista y a todos los clientes conectados.
-     * Actualiza los gifs de victoria y derrota según el ganador.
-     *
-     * @param mensaje Mensaje de resultado del combate
-     * @param ganador Controlador del luchador ganador
-     */
-    public void notificarFinCombate(String mensaje, ControlRikishi ganador) {
-        cVista.registrarLog(mensaje);
-        cVista.registrarLog("GANADOR");
-        cVista.registrarLog(ganador.ObtenerResumen());
-        controlConexion.enviarResultadoATodos(mensaje);
-
+    private void mostrarResultados(ControlRikishi ganador) {
         String rutaVictoria = getGifRuta("victoria");
         String rutaDerrota = getGifRuta("derrota");
-        ControlRikishi cr1 = rikishisConectados.get(0);
-        ControlRikishi cr2 = rikishisConectados.get(1);
 
         if (rutaVictoria != null && rutaDerrota != null) {
-            if (ganador == cr1) {
+            if (ganador == combatiente1) {
                 cVista.mostrarGifJugador1(rutaVictoria);
                 cVista.mostrarGifJugador2(rutaDerrota);
             } else {
@@ -239,21 +237,31 @@ public class ControlGeneral {
         }
     }
 
-    /**
-     * Registra un mensaje en la consola de la vista.
-     *
-     * @param mensaje Mensaje a registrar
-     */
+    public void solicitarTurno(ControlRikishi atacante) {
+        dohyo.aplicarTecnica(atacante);
+    }
+
+    public ControlRikishi obtenerRival(ControlRikishi atacante) {
+        if (atacante == combatiente1) {
+            return combatiente2;
+        } else if (atacante == combatiente2) {
+            return combatiente1;
+        }
+        return null;
+    }
+
+    public boolean isCombateTerminado() {
+        return dohyo.isCombateTerminado();
+    }
+
+    public void notificarMovimiento(String mensaje) {
+        cVista.registrarLog(mensaje);
+    }
+
     public void registrarLog(String mensaje) {
         cVista.registrarLog(mensaje);
     }
 
-    /**
-     * Busca la ruta de un gif por su nombre clave en la lista cargada del properties.
-     *
-     * @param nombre Nombre clave del gif (ej: "espera", "combate", "victoria")
-     * @return Ruta del gif, o null si no se encontró
-     */
     private String getGifRuta(String nombre) {
         for (String[] dato : listaGifDatos) {
             if (dato[0].equalsIgnoreCase(nombre)) {

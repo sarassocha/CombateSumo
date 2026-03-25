@@ -17,25 +17,13 @@ public class ControlVista implements ActionListener {
     public ControlVista(ControlGeneral general) {
         this.controlGeneral = general;
         this.vista = new VentanaPrincipal();
+
         this.vista.getBtnCargar().addActionListener(this);
         this.vista.getBtnIniciar().addActionListener(this);
         this.vista.getBtnSalir().addActionListener(this);
 
-        solicitarArchivoInicial();
-    }
-
-    /**
-     * Se ejecuta automáticamente al iniciar para cargar properties.
-     */
-    private void solicitarArchivoInicial() {
-        File archivo = vista.solicitarArchivoPropiedades();
-
-        if (archivo == null) {
-            vista.mostrarError("Debes seleccionar un archivo properties para iniciar.");
-            return;
-        }
-
-        controlGeneral.cargarProperties(archivo);
+        // Solo mostrar la ventana, no cargar archivo
+        this.vista.setVisible(true);
     }
 
     public void solicitarCargarArchivo() {
@@ -60,6 +48,22 @@ public class ControlVista implements ActionListener {
 
     public void notificarCargaExitosa() {
         vista.mostrarMensaje("Archivo cargado exitosamente.");
+    }
+
+    public void notificarCombateEnDesarrollo() {
+        vista.mostrarMensaje("Combate en desarrollo. Esperando resultado...");
+    }
+
+    public void notificarResultado(String mensaje) {
+        vista.mostrarMensaje(mensaje);
+    }
+
+    public void notificarResultadoFinal(String mensaje, boolean gane) {
+        if (gane) {
+            vista.mostrarMensaje("VICTORIA: " + mensaje);
+        } else {
+            vista.mostrarMensaje("DERROTA: " + mensaje);
+        }
     }
 
     public void cargarDatosEnVista(List<String> tecnicas, int puerto, String hostname) {
@@ -95,13 +99,11 @@ public class ControlVista implements ActionListener {
     public boolean validarSeleccionTecnicas() {
         List<String> seleccionadas = vista.getTecnicasSeleccionadas();
 
-        if (seleccionadas.size() > 2) {
-            vista.mostrarMensaje("Esperando oponente...");
-            return true;
-        } else {
-            vista.mostrarError("Debes seleccionar más de 2 técnicas.");
+        if (seleccionadas.isEmpty()) {
+            vista.mostrarError("Debes seleccionar al menos una técnica.");
             return false;
         }
+        return true;
     }
 
     public void salirAplicacion() {
@@ -123,14 +125,12 @@ public class ControlVista implements ActionListener {
             if (!validarCampos()) return;
             if (!validarSeleccionTecnicas()) return;
 
-            new Thread(() -> {
-                controlGeneral.enviarAlServidor(
-                        ObtenerNombre(),
-                        ObtenerPeso(),
-                        ObtenerAltura(),
-                        ObtenerVictorias()
-                );
-            }).start();
+            controlGeneral.enviarAlServidor(
+                    ObtenerNombre(),
+                    ObtenerPeso(),
+                    ObtenerAltura(),
+                    ObtenerVictorias()
+            );
         }
     }
 }

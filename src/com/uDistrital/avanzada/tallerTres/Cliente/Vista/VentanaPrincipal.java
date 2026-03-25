@@ -50,7 +50,7 @@ public class VentanaPrincipal extends JFrame {
         configurarVentana();
         configurarFileChooser();
         inicializarComponentes();
-        setVisible(true);
+        setVisible(false);
     }
 
     /**
@@ -185,7 +185,7 @@ public class VentanaPrincipal extends JFrame {
         add(panelSur, BorderLayout.SOUTH);
         
     }
-
+    
     public JButton crearBoton(String texto, String comando, Color color) {
         JButton boton = new JButton(texto);
         boton.setActionCommand(comando);
@@ -275,8 +275,8 @@ public class VentanaPrincipal extends JFrame {
      * el archivo properties y cumplir con el requisito de abierto y cerrado
      * @return 
      */
-    public File solicitarArchivoPropiedades(){
-        int resultado = fileChooser.showOpenDialog(this);
+    public File solicitarArchivoPropiedades() {
+        int resultado = fileChooser.showOpenDialog(null);
 
         if (resultado == JFileChooser.APPROVE_OPTION) {
             return fileChooser.getSelectedFile();
