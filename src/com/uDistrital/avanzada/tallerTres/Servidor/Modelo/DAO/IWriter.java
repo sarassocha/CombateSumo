@@ -1,4 +1,4 @@
-package com.uDistrital.avanzada.tallerTres.Servidor.DAO;
+package com.uDistrital.avanzada.tallerTres.Servidor.Modelo.DAO;
 
 /**
  * Interfaz para operaciones de escritura en la base de datos.

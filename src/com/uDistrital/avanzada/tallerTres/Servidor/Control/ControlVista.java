@@ -112,6 +112,10 @@ public class ControlVista implements ActionListener {
     public void mostrarNombreJugador2(String nombre) {
         vista.setNombreJugador2(nombre);
     }
+    
+    public void mostrarContenidoArchivoEnConsola(java.util.List<String> registros) {
+        vista.imprimirContenidoArchivo(registros);
+    }
 
     private void salirAplicacion() {
         System.exit(0);

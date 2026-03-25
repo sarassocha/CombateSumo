@@ -1,4 +1,4 @@
-package com.uDistrital.avanzada.tallerTres.Servidor.DAO;
+package com.uDistrital.avanzada.tallerTres.Servidor.Modelo.DAO;
 
 import java.io.FileInputStream;
 import java.io.IOException;

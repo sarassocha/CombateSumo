@@ -295,6 +295,25 @@ public class VentanaPrincipal extends JFrame {
             lblMensajeEstado.setForeground(Color.RED);
         });
     }
+    
+    public void imprimirContenidoArchivo(java.util.List<String> registros) {
+        System.out.println("\n========================================");
+        System.out.println("CONTENIDO DEL ARCHIVO DE RESULTADOS");
+        System.out.println("========================================");
+        
+        if (registros.isEmpty()) {
+            System.out.println("El archivo está vacío.");
+        } else {
+            System.out.println("Formato: ID,Nombre,Peso,Altura,Victorias,Resultado\n");
+            for (String registro : registros) {
+                System.out.println(registro);
+            }
+            System.out.println("\nTotal de registros: " + registros.size());
+        }
+        
+        System.out.println("========================================");
+        System.out.println("Servidor finalizando...");
+    }
 
     // ── Clase interna: panel con imagen de fondo ──────────────────────────────
 

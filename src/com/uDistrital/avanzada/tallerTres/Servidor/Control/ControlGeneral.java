@@ -5,7 +5,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 
-import com.uDistrital.avanzada.tallerTres.Servidor.DAO.RikishiDAO;
+import com.uDistrital.avanzada.tallerTres.Servidor.Modelo.DAO.RikishiDAO;
 
 /**
  * Coordinador principal del servidor.
@@ -131,6 +131,15 @@ public class ControlGeneral {
                 cVista.registrarLog("Rondas ganadas: " + rondaActual);
                 cVista.registrarLog("========================================");
                 controlConexion.enviarMensajeA(campeon, "¡Ganaste el torneo completo!");
+                
+                try {
+                    Thread.sleep(1000);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
+                
+                controlConexion.cerrarConexion(campeon);
+                mostrarContenidoArchivoYTerminar();
             }
             return;
         }
@@ -181,6 +190,8 @@ public class ControlGeneral {
         
         cVista.registrarLog(">>> GANADOR RONDA " + rondaActual + ": " + ganador.ObtenerNombre() + 
                 " (Victorias: " + ganador.getVictoriasEnTorneo() + ")");
+        
+        guardarResultadosCombateEnArchivo(ganador, perdedor);
         
         ganadorActual = ganador;
         rikishisActivos.remove(perdedor);
@@ -259,6 +270,55 @@ public class ControlGeneral {
 
     public void registrarLog(String mensaje) {
         cVista.registrarLog(mensaje);
+    }
+    
+    private void guardarResultadosCombateEnArchivo(ControlRikishi ganador, ControlRikishi perdedor) {
+        try {
+            com.uDistrital.avanzada.tallerTres.Servidor.Modelo.Rikishi datosGanador = 
+                rikishiDAO.obtenerPorId(ganador.ObtenerNombre());
+            com.uDistrital.avanzada.tallerTres.Servidor.Modelo.Rikishi datosPerdedor = 
+                rikishiDAO.obtenerPorId(perdedor.ObtenerNombre());
+            
+            if (datosGanador != null && datosPerdedor != null) {
+                java.util.Map<String, String> resultados = new java.util.HashMap<>();
+                
+                String registroGanador = String.format("%s,%d,%d,%d,GANADOR",
+                    datosGanador.getNombre(),
+                    datosGanador.getPeso(),
+                    datosGanador.getAltura(),
+                    ganador.getVictoriasEnTorneo());
+                
+                String registroPerdedor = String.format("%s,%d,%d,%d,PERDEDOR",
+                    datosPerdedor.getNombre(),
+                    datosPerdedor.getPeso(),
+                    datosPerdedor.getAltura(),
+                    perdedor.getVictoriasEnTorneo());
+                
+                resultados.put(registroGanador, "");
+                resultados.put(registroPerdedor, "");
+                
+                cProps.guardarResultadosCombate(resultados);
+                cVista.registrarLog("Resultados guardados en archivo de acceso aleatorio");
+            }
+        } catch (IllegalStateException e) {
+            cVista.registrarLog("Advertencia: " + e.getMessage());
+        } catch (Exception e) {
+            cVista.registrarLog("Error guardando resultados en archivo: " + e.getMessage());
+        }
+    }
+    
+    private void mostrarContenidoArchivoYTerminar() {
+        try {
+            List<String> registros = cProps.leerTodosRegistros();
+            cVista.mostrarContenidoArchivoEnConsola(registros);
+            
+            Thread.sleep(2000);
+            System.exit(0);
+            
+        } catch (Exception e) {
+            cVista.registrarLog("Error leyendo archivo: " + e.getMessage());
+            System.exit(1);
+        }
     }
 
     private String getGifRuta(String nombre) {
